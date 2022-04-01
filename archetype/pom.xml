@@ -6,7 +6,11 @@
   <artifactId>my-archetype-id</artifactId>
   <version>1.3</version>
   <packaging>maven-archetype</packaging>
- 
+  
+  <properties>
+    <github.global.server>github</github.global.server>
+  </properties>
+
   <build>
     <extensions>
       <extension>
@@ -17,11 +21,4 @@
     </extensions>
   </build>
 
-  <distributionManagement>
-    <repository>
-      <id>github</id>
-      <name>GitHub OWNER Apache Maven Packages</name>
-      <url>https://maven.pkg.github.com/ConstellationBrands/REPOSITORY</url>
-    </repository>
-  </distributionManagement>
 </project>
