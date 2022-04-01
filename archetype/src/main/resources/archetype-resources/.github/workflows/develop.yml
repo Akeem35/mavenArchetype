@@ -1,0 +1,92 @@
+name: Develop
+
+on:
+  push:
+    branches: [ develop ]
+    paths-ignore:
+      - '.github/workflows/**'
+
+# Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+  
+env:
+  REGISTRY_USER: ${{ github.actor }}
+  REGISTRY_PASSWORD: ${{ github.token }}
+  IMAGE_REGISTRY: ghcr.io/constellationbrands
+  
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    
+    outputs:
+      version: ${{ steps.version_timestamp.outputs.version }}
+      deploy_folder: ${{ steps.deploy_folder.outputs.deploy_folder }}
+      deploy_path: ${{ steps.deploy_folder.outputs.deploy_path }}
+      repo_name: ${{steps.get_repo.outputs.name}}
+      
+    permissions:
+      contents: write
+      packages: write
+      
+    steps:
+     - name: Source Code 
+       uses: actions/checkout@v2
+       with:
+          fetch-depth: 0 
+     
+     - name: Determine version 
+       id: version_timestamp
+       run: |
+         echo "::set-output name=VERSION::${REF#refs/heads/}-$(date +%s)"
+       env:
+         REF: ${{ github.ref }}
+    
+     - name: Get Repo name 
+       id: get_repo
+       run: |
+        echo "::set-output name=name::$(echo "$GITHUB_REPOSITORY" | awk -F / '{print $2}' | sed -e "s/:refs//")"
+       env:
+          REF: ${{ github.ref }}
+      
+     - name: Log in to ghcr.io
+       uses: redhat-actions/podman-login@v1
+       with:
+         username: ${{ env.REGISTRY_USER }}
+         password: ${{ env.REGISTRY_PASSWORD }}
+         registry: ${{ env.IMAGE_REGISTRY }}
+     
+     - name: Setup pack
+       uses: buildpacks/github-actions/setup-pack@v4.1.0
+
+     - name: Build and Publish
+       run: pack build ${{ env.IMAGE_REGISTRY }}/${{ steps.get_repo.outputs.name }} --builder heroku/buildpacks:20  --publish -t ${{ env.IMAGE_REGISTRY }}/${{ steps.get_repo.outputs.name }}:${{ steps.version_timestamp.outputs.VERSION }}
+        
+     - name: Get deploy folder based on branch
+       id: deploy_folder
+       run: |
+         if [[ "$REF" == 'refs/heads/develop' ]]
+         then
+             echo "::set-output name=deploy_folder::development"
+             echo "::set-output name=deploy_path::${{ steps.get_repo.outputs.name }}-dev"
+         fi
+       env:
+        REF: ${{ github.ref }}
+  
+  platform-deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          repository: ConstellationBrands/cd-sales
+          token: ${{ secrets.CD_RELEASE_TOKEN }}
+      - run: echo ${{needs.build-and-push.outputs.version}}
+      - run: echo ${{needs.build-and-push.outputs.deploy_folder}}
+      - run: sed -i -E "s|(newTag):.*|\1:\ ${{needs.build-and-push.outputs.version}}|" ${{needs.build-and-push.outputs.repo_name}}/${{needs.build-and-push.outputs.deploy_path}}/kustomization.yaml
+      - run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add .
+          git commit -m "update image version ${{needs.build-and-push.outputs.version}}"
+          git push        

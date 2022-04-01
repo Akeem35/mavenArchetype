@@ -1,0 +1,26 @@
+name: Main
+
+on:
+  push:
+    branches: [ main ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+
+  deploy:
+    name: Deploy to Heroku PROD
+    runs-on: ubuntu-latest
+    env:
+      HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+      HEROKU_EMAIL_ADDRESS: ${{ secrets.HEROKU_EMAIL_ADDRESS }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+      - name: Deploy to Heroku
+        uses: AkhileshNS/heroku-deploy@v3.12.12
+        with:
+          heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+          heroku_email: ${{ secrets.HEROKU_EMAIL_ADDRESS }}
+          heroku_app_name:${{ github.repository }}-api-prod
